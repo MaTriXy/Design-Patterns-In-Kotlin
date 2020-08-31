@@ -4,7 +4,7 @@
 
 Project maintained by [@dbacinski](http://twitter.com/dbacinski) (Dariusz Baciński)
 
-Based on [Design-Patterns-In-Swift](https://github.com/ochococo/Design-Patterns-In-Swift) by [@nsmeme](http://twitter.com/nsmeme) (Oktawian Chojnacki)
+Inspired by [Design-Patterns-In-Swift](https://github.com/ochococo/Design-Patterns-In-Swift) by [@nsmeme](http://twitter.com/nsmeme) (Oktawian Chojnacki)
 
 ## Table of Contents
 
@@ -15,6 +15,8 @@ Based on [Design-Patterns-In-Swift](https://github.com/ochococo/Design-Patterns-
 	* [State](#state)
 	* [Chain of Responsibility](#chain-of-responsibility)
 	* [Visitor](#visitor)
+	* [Mediator](#mediator)
+	* [Memento](#memento)
 * [Creational Patterns](#creational)
 	* [Builder / Assembler](#builder--assembler)
 	* [Factory Method](#factory-method)
@@ -25,6 +27,7 @@ Based on [Design-Patterns-In-Swift](https://github.com/ochococo/Design-Patterns-
 	* [Decorator](#decorator)
 	* [Facade](#facade)
 	* [Protection Proxy](#protection-proxy)
+	* [Composite](#composite)
 
 Behavioral
 ==========
@@ -33,7 +36,7 @@ Behavioral
 >
 >**Source:** [wikipedia.org](http://en.wikipedia.org/wiki/Behavioral_pattern)
 
-[Observer / Listener](/src/main/kotlin/Listener.kt)
+[Observer / Listener](/patterns/src/test/kotlin/Listener.kt)
 --------
 
 The observer pattern is used to allow an object to publish changes to its state.
@@ -43,19 +46,25 @@ Other objects subscribe to be immediately notified of any changes.
 
 ```kotlin
 interface TextChangedListener {
-    fun onTextChanged(newText: String)
+
+    fun onTextChanged(oldText: String, newText: String)
 }
 
 class PrintingTextChangedListener : TextChangedListener {
-    override fun onTextChanged(newText: String) = println("Text is changed to: $newText")
+    
+    private var text = ""
+    
+    override fun onTextChanged(oldText: String, newText: String) {
+        text = "Text is changed: $oldText -> $newText"
+    }
 }
 
 class TextView {
 
-    var listener: TextChangedListener? = null
+    val listeners = mutableListOf<TextChangedListener>()
 
-    var text: String by Delegates.observable("") { prop, old, new ->
-        listener?.onTextChanged(new)
+    var text: String by Delegates.observable("<empty>") { _, old, new ->
+        listeners.forEach { it.onTextChanged(old, new) }
     }
 }
 ```
@@ -63,20 +72,24 @@ class TextView {
 #### Usage
 
 ```kotlin
-val textView = TextView()
-textView.listener = PrintingTextChangedListener()
-textView.text = "Lorem ipsum"
-textView.text = "dolor sit amet"
+val textView = TextView().apply {
+    listener = PrintingTextChangedListener()
+}
+
+with(textView) {
+    text = "Lorem ipsum"
+    text = "dolor sit amet"
+}
 ```
 
 #### Output
 
 ```
-Text is changed to: Lorem ipsum
-Text is changed to: dolor sit amet
+Text is changed <empty> -> Lorem ipsum
+Text is changed Lorem ipsum -> dolor sit amet
 ```
 
-[Strategy](/src/main/kotlin/Strategy.kt)
+[Strategy](/patterns/src/test/kotlin/Strategy.kt)
 -----------
 
 The strategy pattern is used to create an interchangeable family of algorithms from which the required process is chosen at run-time.
@@ -84,26 +97,30 @@ The strategy pattern is used to create an interchangeable family of algorithms f
 #### Example
 
 ```kotlin
-class Printer(val stringFormatterStrategy: (String) -> String) {
-    fun printString(string: String) = println(stringFormatterStrategy.invoke(string))
+class Printer(private val stringFormatterStrategy: (String) -> String) {
+
+    fun printString(string: String) {
+        println(stringFormatterStrategy(string))
+    }
 }
 
 val lowerCaseFormatter: (String) -> String = { it.toLowerCase() }
-
 val upperCaseFormatter = { it: String -> it.toUpperCase() }
 ```
 
 #### Usage
 
 ```kotlin
+val inputString = "LOREM ipsum DOLOR sit amet"
+
 val lowerCasePrinter = Printer(lowerCaseFormatter)
-lowerCasePrinter.printString("LOREM ipsum DOLOR sit amet")
+lowerCasePrinter.printString(inputString)
 
 val upperCasePrinter = Printer(upperCaseFormatter)
-upperCasePrinter.printString("LOREM ipsum DOLOR sit amet")
+upperCasePrinter.printString(inputString)
 
-val prefixPrinter = Printer({ "Prefix: " + it })
-prefixPrinter.printString("LOREM ipsum DOLOR sit amet")
+val prefixPrinter = Printer { "Prefix: $it" }
+prefixPrinter.printString(inputString)
 ```
 
 #### Output
@@ -114,7 +131,7 @@ LOREM IPSUM DOLOR SIT AMET
 Prefix: LOREM ipsum DOLOR sit amet
 ```
 
-[Command](/src/main/kotlin/Command.kt)
+[Command](/patterns/src/test/kotlin/Command.kt)
 -------
 
 The command pattern is used to express a request, including the call to be made and all of its required parameters, in a command object. The command may then be executed immediately or held for later use.
@@ -127,24 +144,27 @@ interface OrderCommand {
 }
 
 class OrderAddCommand(val id: Long) : OrderCommand {
-    override fun execute() = println("adding order with id: $id")
+    override fun execute() = println("Adding order with id: $id")
 }
 
 class OrderPayCommand(val id: Long) : OrderCommand {
-    override fun execute() = println("paying for order with id: $id")
+    override fun execute() = println("Paying for order with id: $id")
 }
 
 class CommandProcessor {
 
     private val queue = ArrayList<OrderCommand>()
 
-    fun addToQueue(orderCommand: OrderCommand): CommandProcessor
-            = apply { queue.add(orderCommand) }
+    fun addToQueue(orderCommand: OrderCommand): CommandProcessor =
+        apply {
+            queue.add(orderCommand)
+        }
 
-    fun processCommands(): CommandProcessor = apply {
-        queue.forEach { it.execute() }
-        queue.clear()
-    }
+    fun processCommands(): CommandProcessor =
+        apply {
+            queue.forEach { it.execute() }
+            queue.clear()
+        }
 }
 ```
 
@@ -162,13 +182,13 @@ CommandProcessor()
 #### Output
 
 ```
-adding order with id: 1
-adding order with id: 2
-paying for order with id: 2
-paying for order with id: 1
+Adding order with id: 1
+Adding order with id: 2
+Paying for order with id: 2
+Paying for order with id: 1
 ```
 
-[State](/src/main/kotlin/State.kt)
+[State](/patterns/src/test/kotlin/State.kt)
 ------
 
 The state pattern is used to alter the behaviour of an object as its internal state changes.
@@ -179,21 +199,13 @@ The pattern allows the class for an object to apparently change at run-time.
 ```kotlin
 sealed class AuthorizationState
 
-class Unauthorized : AuthorizationState() // may be an object: object Unauthorized : AuthorizationState()
+object Unauthorized : AuthorizationState()
 
 class Authorized(val userName: String) : AuthorizationState()
 
 class AuthorizationPresenter {
 
-    private var state: AuthorizationState = Unauthorized()
-
-    fun loginUser(userLogin: String) {
-        state = Authorized(userLogin)
-    }
-
-    fun logoutUser() {
-        state = Unauthorized()
-    }
+    private var state: AuthorizationState = Unauthorized
 
     val isAuthorized: Boolean
         get() = when (state) {
@@ -201,24 +213,37 @@ class AuthorizationPresenter {
             is Unauthorized -> false
         }
 
-    val userLogin: String
-        get() = when (state) {
-            is Authorized -> (state as Authorized).userName
-            is Unauthorized -> "Unknown"
+    val userName: String
+        get() {
+            val state = this.state //val enables smart casting of state
+            return when (state) {
+                is Authorized -> state.userName
+                is Unauthorized -> "Unknown"
+            }
         }
 
-    override fun toString() = "User '$userLogin' is logged in: $isAuthorized"
+    fun loginUser(userName: String) {
+        state = Authorized(userName)
+    }
+
+    fun logoutUser() {
+        state = Unauthorized
+    }
+
+    override fun toString() = "User '$userName' is logged in: $isAuthorized"
 }
 ```
 
 #### Usage
 
 ```kotlin
-val authorization = AuthorizationPresenter()
-authorization.loginUser("admin")
-println(authorization)
-authorization.logoutUser()
-println(authorization)
+val authorizationPresenter = AuthorizationPresenter()
+
+authorizationPresenter.loginUser("admin")
+println(authorizationPresenter)
+
+authorizationPresenter.logoutUser()
+println(authorizationPresenter)
 ```
 
 #### Output
@@ -228,7 +253,7 @@ User 'admin' is logged in: true
 User 'Unknown' is logged in: false
 ```
 
-[Chain of Responsibility](/src/main/kotlin/ChainOfResponsibility.kt)
+[Chain of Responsibility](/patterns/src/test/kotlin/ChainOfResponsibility.kt)
 -----------------------
 
 The chain of responsibility pattern is used to process varied requests, each of which may be dealt with by a different handler.
@@ -236,59 +261,76 @@ The chain of responsibility pattern is used to process varied requests, each of 
 #### Example
 
 ```kotlin
-interface MessageChain {
-    fun addLines(inputHeader: String): String
+interface HeadersChain {
+    fun addHeader(inputHeader: String): String
 }
 
-class AuthenticationHeader(val token: String?, var next: MessageChain? = null) : MessageChain {
+class AuthenticationHeader(val token: String?, var next: HeadersChain? = null) : HeadersChain {
 
-    override fun addLines(inputHeader: String): String {
+    override fun addHeader(inputHeader: String): String {
         token ?: throw IllegalStateException("Token should be not null")
-        return "$inputHeader Authorization: Bearer $token\n".let { next?.addLines(it) ?: it }
+        return inputHeader + "Authorization: Bearer $token\n"
+            .let { next?.addHeader(it) ?: it }
     }
 }
 
-class ContentTypeHeader(val contentType: String, var next: MessageChain? = null) : MessageChain {
+class ContentTypeHeader(val contentType: String, var next: HeadersChain? = null) : HeadersChain {
 
-    override fun addLines(inputHeader: String): String
-            = "$inputHeader ContentType: $contentType\n".let { next?.addLines(it) ?: it }
+    override fun addHeader(inputHeader: String): String =
+        inputHeader + "ContentType: $contentType\n"
+            .let { next?.addHeader(it) ?: it }
 }
 
-class BodyPayload(val body: String, var next: MessageChain? = null) : MessageChain {
+class BodyPayload(val body: String, var next: HeadersChain? = null) : HeadersChain {
 
-    override fun addLines(inputHeader: String): String
-            = "$inputHeader $body\n".let { next?.addLines(it) ?: it }
+    override fun addHeader(inputHeader: String): String =
+        inputHeader + "$body"
+            .let { next?.addHeader(it) ?: it }
 }
 ```
 
 #### Usage
 
 ```kotlin
+//create chain elements
 val authenticationHeader = AuthenticationHeader("123456")
 val contentTypeHeader = ContentTypeHeader("json")
-val messageBody = BodyPayload("{\"username\"=\"dbacinski\"}")
+val messageBody = BodyPayload("Body:\n{\n\"username\"=\"dbacinski\"\n}")
 
-val messageChainWithAuthorization = messageChainWithAuthorization(authenticationHeader, contentTypeHeader, messageBody)
-val messageWithAuthentication = messageChainWithAuthorization.addLines("Message with Authentication:\n")
+//construct chain
+authenticationHeader.next = contentTypeHeader
+contentTypeHeader.next = messageBody
+
+//execute chain
+val messageWithAuthentication =
+    authenticationHeader.addHeader("Headers with Authentication:\n")
 println(messageWithAuthentication)
 
-fun messageChainWithAuthorization(authenticationHeader: AuthenticationHeader, contentTypeHeader: ContentTypeHeader, messageBody: BodyPayload): MessageChain {
-    authenticationHeader.next = contentTypeHeader
-    contentTypeHeader.next = messageBody
-    return authenticationHeader
-}
+val messageWithoutAuth =
+    contentTypeHeader.addHeader("Headers:\n")
+println(messageWithoutAuth)
 ```
 
 #### Output
 
 ```
-Message with Authentication:
+Headers with Authentication:
 Authorization: Bearer 123456
 ContentType: json
-{"username"="dbacinski"}
+Body:
+{
+"username"="dbacinski"
+}
+
+Headers:
+ContentType: json
+Body:
+{
+"username"="dbacinski"
+}
 ```
 
-[Visitor](/src/main/kotlin/Visitor.kt)
+[Visitor](/patterns/src/test/kotlin/Visitor.kt)
 -------
 
 The visitor pattern is used to separate a relatively complex set of structured data classes from the functionality that may be performed upon the data that they hold.
@@ -297,39 +339,50 @@ The visitor pattern is used to separate a relatively complex set of structured d
 
 ```kotlin
 interface ReportVisitable {
-    fun accept(visitor: ReportVisitor)
+    fun <R> accept(visitor: ReportVisitor<R>): R
 }
 
 class FixedPriceContract(val costPerYear: Long) : ReportVisitable {
-    override fun accept(visitor: ReportVisitor) = visitor.visit(this)
+    override fun <R> accept(visitor: ReportVisitor<R>): R = visitor.visit(this)
 }
 
 class TimeAndMaterialsContract(val costPerHour: Long, val hours: Long) : ReportVisitable {
-    override fun accept(visitor: ReportVisitor) = visitor.visit(this)
+    override fun <R> accept(visitor: ReportVisitor<R>): R = visitor.visit(this)
 }
 
 class SupportContract(val costPerMonth: Long) : ReportVisitable {
-    override fun accept(visitor: ReportVisitor) = visitor.visit(this)
+    override fun <R> accept(visitor: ReportVisitor<R>): R = visitor.visit(this)
 }
 
-interface ReportVisitor {
-    fun visit(contract: FixedPriceContract)
-    fun visit(contract: TimeAndMaterialsContract)
-    fun visit(contract: SupportContract)
+interface ReportVisitor<out R> {
+
+    fun visit(contract: FixedPriceContract): R
+    fun visit(contract: TimeAndMaterialsContract): R
+    fun visit(contract: SupportContract): R
 }
 
-class MonthlyCostReportVisitor(var monthlyCost: Long = 0) : ReportVisitor {
-    override fun visit(contract: FixedPriceContract) {
-        monthlyCost += contract.costPerYear / 12
-    }
+class MonthlyCostReportVisitor : ReportVisitor<Long> {
 
-    override fun visit(contract: TimeAndMaterialsContract) {
-        monthlyCost += contract.costPerHour * contract.hours
-    }
+    override fun visit(contract: FixedPriceContract): Long =
+        contract.costPerYear / 12
 
-    override fun visit(contract: SupportContract) {
-        monthlyCost += contract.costPerMonth
-    }
+    override fun visit(contract: TimeAndMaterialsContract): Long =
+        contract.costPerHour * contract.hours
+
+    override fun visit(contract: SupportContract): Long =
+        contract.costPerMonth
+}
+
+class YearlyReportVisitor : ReportVisitor<Long> {
+
+    override fun visit(contract: FixedPriceContract): Long =
+        contract.costPerYear
+
+    override fun visit(contract: TimeAndMaterialsContract): Long =
+        contract.costPerHour * contract.hours
+
+    override fun visit(contract: SupportContract): Long =
+        contract.costPerMonth * 12
 }
 ```
 
@@ -337,21 +390,148 @@ class MonthlyCostReportVisitor(var monthlyCost: Long = 0) : ReportVisitor {
 
 ```kotlin
 val projectAlpha = FixedPriceContract(costPerYear = 10000)
-val projectBeta = SupportContract(costPerMonth = 500)
 val projectGamma = TimeAndMaterialsContract(hours = 150, costPerHour = 10)
+val projectBeta = SupportContract(costPerMonth = 500)
 val projectKappa = TimeAndMaterialsContract(hours = 50, costPerHour = 50)
 
 val projects = arrayOf(projectAlpha, projectBeta, projectGamma, projectKappa)
 
 val monthlyCostReportVisitor = MonthlyCostReportVisitor()
-projects.forEach { it.accept(monthlyCostReportVisitor) }
-println("Monthly cost: ${monthlyCostReportVisitor.monthlyCost}")
+
+val monthlyCost = projects.map { it.accept(monthlyCostReportVisitor) }.sum()
+println("Monthly cost: $monthlyCost")
+assertThat(monthlyCost).isEqualTo(5333)
+
+val yearlyReportVisitor = YearlyReportVisitor()
+val yearlyCost = projects.map { it.accept(yearlyReportVisitor) }.sum()
+println("Yearly cost: $yearlyCost")
+assertThat(yearlyCost).isEqualTo(20000)
 ```
 
 #### Output
 
 ```
 Monthly cost: 5333
+Yearly cost: 20000
+```
+
+[Mediator](/patterns/src/test/kotlin/Mediator.kt)
+-------
+
+Mediator design pattern is used to provide a centralized communication medium between different objects in a system. This pattern is very helpful in an enterprise application where multiple objects are interacting with each other.
+#### Example
+
+```kotlin
+class ChatUser(private val mediator: ChatMediator, val name: String) {
+    fun send(msg: String) {
+        println("$name: Sending Message= $msg")
+        mediator.sendMessage(msg, this)
+    }
+
+    fun receive(msg: String) {
+        println("$name: Message received: $msg")
+    }
+}
+
+class ChatMediator {
+
+    private val users: MutableList<ChatUser> = ArrayList()
+
+    fun sendMessage(msg: String, user: ChatUser) {
+        users
+            .filter { it != user }
+            .forEach {
+                it.receive(msg)
+            }
+    }
+
+    fun addUser(user: ChatUser): ChatMediator =
+        apply { users.add(user) }
+
+}
+```
+
+#### Usage
+
+```kotlin
+val mediator = ChatMediator()
+val john = ChatUser(mediator, "John")
+
+mediator
+    .addUser(ChatUser(mediator, "Alice"))
+    .addUser(ChatUser(mediator, "Bob"))
+    .addUser(john)
+john.send("Hi everyone!")
+```
+
+#### Output
+
+```
+John: Sending Message= Hi everyone!
+Alice: Message received: Hi everyone!
+Bob: Message received: Hi everyone!
+```
+
+[Memento](/patterns/src/test/kotlin/Memento.kt)
+-------
+
+The memento pattern is a software design pattern that provides the ability to restore an object to its previous state (undo via rollback).
+
+#### Example
+```kotlin
+data class Memento(val state: String)
+
+class Originator(var state: String) {
+
+    fun createMemento(): Memento {
+        return Memento(state)
+    }
+
+    fun restore(memento: Memento) {
+        state = memento.state
+    }
+}
+
+class CareTaker {
+    private val mementoList = ArrayList<Memento>()
+
+    fun saveState(state: Memento) {
+        mementoList.add(state)
+    }
+
+    fun restore(index: Int): Memento {
+        return mementoList[index]
+    }
+}
+```
+
+#### Usage
+```kotlin
+val originator = Originator("initial state")
+val careTaker = CareTaker()
+careTaker.saveState(originator.createMemento())
+
+originator.state = "State #1"
+originator.state = "State #2"
+careTaker.saveState(originator.createMemento())
+
+originator.state = "State #3"
+println("Current State: " + originator.state)
+assertThat(originator.state).isEqualTo("State #3")
+
+originator.restore(careTaker.restore(1))
+println("Second saved state: " + originator.state)
+assertThat(originator.state).isEqualTo("State #2")
+
+originator.restore(careTaker.restore(0))
+println("First saved state: " + originator.state)
+```
+
+#### Output
+```
+Current State: State #3
+Second saved state: State #2
+First saved state: initial state
 ```
 
 Creational
@@ -361,8 +541,7 @@ Creational
 >
 >**Source:** [wikipedia.org](http://en.wikipedia.org/wiki/Creational_pattern)
 
-
-[Builder / Assembler](/src/main/kotlin/Builder.kt)
+[Builder / Assembler](/patterns/src/test/kotlin/Builder.kt)
 ----------
 
 The builder pattern is used to create complex objects with constituent parts that must be created in the same order or using a specific algorithm.
@@ -374,7 +553,7 @@ An external class controls the construction algorithm.
 // Let's assume that Dialog class is provided by external library.
 // We have only access to Dialog public interface which cannot be changed.
 
-class Dialog() {
+class Dialog {
 
     fun showTitle() = println("showing title")
 
@@ -481,7 +660,7 @@ showing image with size 0
 showing dialog Dialog@5f184fc6
 ```
 
-[Factory Method](/src/main/kotlin/FactoryMethod.kt)
+[Factory Method](/patterns/src/test/kotlin/FactoryMethod.kt)
 -----------------
 
 The factory pattern is used to replace class constructors, abstracting the process of object generation so that the type of the object instantiated can be determined at run-time.
@@ -489,41 +668,42 @@ The factory pattern is used to replace class constructors, abstracting the proce
 #### Example
 
 ```kotlin
-interface Currency {
+sealed class Country {
+    object USA : Country() //Kotlin 1.0 could only be an inner class or object
+}
+
+object Spain : Country() //Kotlin 1.1 declared as top level class/object in the same file
+class Greece(val someProperty: String) : Country()
+data class Canada(val someProperty: String) : Country() //Kotlin 1.1 data class extends other class
+//object Poland : Country()
+
+class Currency(
     val code: String
-}
+)
 
-class Euro(override val code: String = "EUR") : Currency
-class UnitedStatesDollar(override val code: String = "USD") : Currency
+object CurrencyFactory {
 
-enum class Country {
-    UnitedStates, Spain, UK, Greece
-}
-
-class CurrencyFactory {
-    fun currencyForCountry(country: Country): Currency? {
-        return when (country) {
-            Country.Spain, Country.Greece -> Euro()
-            Country.UnitedStates          -> UnitedStatesDollar()
-            else                          -> null
-                }
-    }
+    fun currencyForCountry(country: Country): Currency =
+        when (country) {
+            is Greece -> Currency("EUR")
+            is Spain -> Currency("EUR")
+            is Country.USA -> Currency("USD")
+            is Canada -> Currency("CAD")
+        }  //try to add a new country Poland, it won't even compile without adding new branch to 'when'
 }
 ```
 
 #### Usage
 
 ```kotlin
-val noCurrencyCode = "No Currency Code Available"
+val greeceCurrency = CurrencyFactory.currencyForCountry(Greece("")).code
+println("Greece currency: $greeceCurrency")
 
-val greeceCode = CurrencyFactory().currencyForCountry(Country.Greece)?.code ?: noCurrencyCode
-println("Greece currency: $greeceCode")
+val usaCurrency = CurrencyFactory.currencyForCountry(Country.USA).code
+println("USA currency: $usaCurrency")
 
-val usCode = CurrencyFactory().currencyForCountry(Country.UnitedStates)?.code ?: noCurrencyCode
-println("US currency: $usCode")
-
-val ukCode = CurrencyFactory().currencyForCountry(Country.UK)?.code ?: noCurrencyCode
-println("UK currency: $ukCode")
+assertThat(greeceCurrency).isEqualTo("EUR")
+assertThat(usaCurrency).isEqualTo("USD")
 ```
 
 #### Output
@@ -534,7 +714,7 @@ US currency: USD
 UK currency: No Currency Code Available
 ```
 
-[Singleton](/src/main/kotlin/Singleton.kt)
+[Singleton](/patterns/src/test/kotlin/Singleton.kt)
 ------------
 
 The singleton pattern ensures that only one object of a particular class is ever created.
@@ -570,7 +750,7 @@ Printing with object: PrinterDriver@6ff3c5b5
 Printing with object: PrinterDriver@6ff3c5b5
 ```
 
-[Abstract Factory](/src/main/kotlin/AbstractFactory.kt)
+[Abstract Factory](/patterns/src/test/kotlin/AbstractFactory.kt)
 -------------------
 
 The abstract factory pattern is used to provide a client with a set of related or dependant objects.
@@ -627,7 +807,7 @@ Structural
 >
 >**Source:** [wikipedia.org](http://en.wikipedia.org/wiki/Structural_pattern)
 
-[Adapter](/src/main/kotlin/Adapter.kt)
+[Adapter](/patterns/src/test/kotlin/Adapter.kt)
 ----------
 
 The adapter pattern is used to provide a link between two otherwise incompatible types by wrapping the "adaptee" with a class that supports the interface required by the client.
@@ -676,7 +856,7 @@ println("${fahrenheitTemperature.temperature} F -> ${celsiusTemperature.temperat
 100.0 F -> 37.77777777777778 C
 ```
 
-[Decorator](/src/main/kotlin/Decorator.kt)
+[Decorator](/patterns/src/test/kotlin/Decorator.kt)
 ------------
 
 The decorator pattern is used to extend or alter the functionality of objects at run-time by wrapping them in an object of a decorator class.
@@ -741,7 +921,7 @@ Normal: Making small coffee
 Enhanced: Adding milk
 ```
 
-[Facade](/src/main/kotlin/Facade.kt)
+[Facade](/patterns/src/test/kotlin/Facade.kt)
 ---------
 
 The facade pattern is used to define a simplified interface to a more complex subsystem.
@@ -799,7 +979,7 @@ Storing cached data: {USER_KEY=dbacinski} to file: /data/default.prefs
 Found stored user: User(login=dbacinski)
 ```
 
-[Protection Proxy](/src/main/kotlin/ProtectionProxy.kt)
+[Protection Proxy](/patterns/src/test/kotlin/ProtectionProxy.kt)
 ------------------
 
 The proxy pattern is used to provide a surrogate or placeholder object, which references an underlying object.
@@ -849,6 +1029,70 @@ Incorrect password. Access denied!
 Password is correct: secret
 Reading file: readme.md
 ```
+
+
+
+[Composite](/patterns/src/test/kotlin/Composite.kt)
+------------------
+
+The composite pattern is used to compose zero-or-more similar 
+objects so that they can be manipulated as one object.
+
+#### Example
+
+```kotlin
+
+open class Equipment(private var price: Int, private var name: String) {
+    open fun getPrice(): Int = price
+}
+
+
+/*
+[composite]
+*/
+
+open class Composite(name: String) : Equipment(0, name) {
+    val equipments = ArrayList<Equipment>()
+
+    fun add(equipment: Equipment) {
+        this.equipments.add(equipment)
+    }
+
+    override fun getPrice(): Int {
+        return equipments.map { it.getPrice() }.sum()
+    }
+}
+
+
+/*
+ leafs
+*/
+
+class Cabbinet : Composite("cabbinet")
+class FloppyDisk : Equipment(70, "Floppy Disk")
+class HardDrive : Equipment(250, "Hard Drive")
+class Memory : Equipment(280, "Memory")
+
+
+```
+
+#### Usage
+
+```kotlin
+var cabbinet = Cabbinet()
+cabbinet.add(FloppyDisk())
+cabbinet.add(HardDrive())
+cabbinet.add(Memory())
+println(cabbinet.getPrice())
+```
+
+#### Ouput
+
+```
+600
+```
+
+
 
 Info
 ====
